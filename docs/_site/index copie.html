@@ -1,0 +1,3424 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+    
+    <meta charset="UTF-8">
+
+    <!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>Raw Audio Score-based Generative Modeling for Controllable High-resolution Drum Sound Synthesis | CRASH: Raw Audio Score-based Generative Modeling for Controllable High-resolution Drum Sound Synthesis</title>
+<meta name="generator" content="Jekyll v3.8.5" />
+<meta property="og:title" content="Raw Audio Score-based Generative Modeling for Controllable High-resolution Drum Sound Synthesis" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Companion website for the eponymous paper" />
+<meta property="og:description" content="Companion website for the eponymous paper" />
+<link rel="canonical" href="http://localhost:4000/index%20copie.html" />
+<meta property="og:url" content="http://localhost:4000/index%20copie.html" />
+<meta property="og:site_name" content="CRASH: Raw Audio Score-based Generative Modeling for Controllable High-resolution Drum Sound Synthesis" />
+<script type="application/ld+json">
+{"url":"http://localhost:4000/index%20copie.html","description":"Companion website for the eponymous paper","headline":"Raw Audio Score-based Generative Modeling for Controllable High-resolution Drum Sound Synthesis","@type":"WebPage","@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#157878">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="stylesheet" href="/assets/css/style.css?v=">
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/katex.min.css" integrity="sha384-zB1R0rpPzHqg7Kpt0Aljp8JPLqbXI3bhnPWROx27a9N0Ll6ZP/+DiW/UqRcLbRjq" crossorigin="anonymous">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/katex.min.js" integrity="sha384-y23I5Q6l+B6vatafAwxRu/0oK/79VlbSz7Q9aiSZUvyWYIYsd+qj+o24G5ZU2zJz" crossorigin="anonymous"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/contrib/auto-render.min.js" integrity="sha384-kWPLUVMOks5AQFrykwIup5lo0m3iMkkHrD0uJ4H5cjeGihAutqP0yW0J6dpFiVkI" crossorigin="anonymous"
+    onload="renderMathInElement(document.body);"></script>
+
+    <link rel="icon" href="assets/favicon.ico" type="image/x-icon" />
+</head>
+<body>
+    <!-- <a id="skip-to-content" href="#content">Skip to the content.</a> -->
+
+    <header class="page-header" role="banner">
+        <h1 class="project-name">Raw Audio Score-based Generative Modeling for Controllable High-resolution Drum Sound Synthesis</h1>
+        <h2 class="project-tagline">Companion website for the eponymous paper</h2>
+        
+        
+    </header>
+
+    <main id="content" class="main-content" role="main">
+        <p>This is joint work by <a href="https://twitter.com/theisbazin">Théis Bazin</a>, <a href="https://twitter.com/gaetan_hadjeres">Gaëtan Hadjeres</a>,
+<a href="https://esling.github.io/">Philippe Esling</a> and <a href="http://repmus.ircam.fr/malt">Mikhail Malt</a>, published
+at the 2020 Joint Conference on AI Music Creativity.
+Here is a <a href="https://boblsturm.github.io/aimusic2020/papers/CSMC__MuMe_2020_paper_49.pdf">direct link</a>
+to the paper on the conference’s server (PDF).</p>
+
+<p>In this paper, we adapt the <a href="https://arxiv.org/abs/1906.00446" title="ArXiV: VQ-VAE-2">VQ-VAE-2 architecture</a> to the interactive generation of sounds.</p>
+
+<p>To this end, we introduce a modified version of the Mel-IF representation proposed in the
+<a href="https://arxiv.org/abs/1902.08710" title="ArXiV: GANSynth">GANSynth paper</a>, that allows to remove irrelevant noise in this representation,
+making it more adapted to quantization via the VQ-VAE-2.</p>
+
+<p>We then follow the approach proposed in the original VQ-VAE-2 paper and generate new sounds by sampling
+from the distribution of codemaps produced the trained VQ-VAE-2.
+This has the advantage of turning the intractable autoregressive modeling of full-scaled \( 1024 \times 128 \) ,
+real-valued spectrograms into just sampling two small discrete codemaps of sizes
+\( 32 \times 4 \) and \( 64 \times 8 \).</p>
+
+<ul id="markdown-toc">
+  <li><a href="#vq-vae-2-architecture" id="markdown-toc-vq-vae-2-architecture">VQ-VAE-2 Architecture</a></li>
+  <li><a href="#image-like-representation-for-audio" id="markdown-toc-image-like-representation-for-audio">Image-like Representation for Audio</a></li>
+  <li><a href="#sequence-masked-transformers-for-inpainting" id="markdown-toc-sequence-masked-transformers-for-inpainting">Sequence-masked Transformers for Inpainting</a></li>
+  <li><a href="#experiments" id="markdown-toc-experiments">Experiments</a>    <ul>
+      <li><a href="#vq-vae-reconstructions" id="markdown-toc-vq-vae-reconstructions">VQ-VAE reconstructions</a>        <ul>
+          <li><a href="#discussion" id="markdown-toc-discussion">Discussion</a></li>
+        </ul>
+      </li>
+      <li><a href="#unconditional-generation" id="markdown-toc-unconditional-generation">Unconditional Generation</a>        <ul>
+          <li><a href="#discussion-1" id="markdown-toc-discussion-1">Discussion</a></li>
+        </ul>
+      </li>
+      <li><a href="#inpainting-operations" id="markdown-toc-inpainting-operations">Inpainting operations</a>        <ul>
+          <li><a href="#temporal-inpainting" id="markdown-toc-temporal-inpainting">Temporal inpainting</a></li>
+          <li><a href="#frequency-inpainting" id="markdown-toc-frequency-inpainting">Frequency inpainting</a></li>
+          <li><a href="#keep-the-top-regenerate-the-bottom" id="markdown-toc-keep-the-top-regenerate-the-bottom">Keep the top, regenerate the bottom</a></li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+<h1 id="vq-vae-2-architecture">VQ-VAE-2 Architecture</h1>
+
+<p>The VQ-VAE-2 is a two-layer hierarchical model based on the common VAE encoder-decoder framework and
+was originally introduced for the generation of images. This model learns to encode
+2D images onto two, 2D integer arrays of query indexes: the top codemap and the bottom codemap.</p>
+
+<p>This quantization to integers is performed by learning within each of the two quantized layers a dictionary of code vectors
+onto which the latent encoder representations are projected.
+These two codemaps are conditionally bound. Indeed, the encoder of the VQ-VAE-2 first downsamples
+and quantizes the input image into the bottom map. This first representation is then further
+downsampled and again quantized, yielding the top codemap.</p>
+
+<p>In the decoder, the top codemap is first reconstructed using the code vectors of the learned dictionary.
+This reconstruction is then used as a conditioning information for the decoding of the bottom codemap.</p>
+
+<p>This architecture is represented in the following diagram.</p>
+
+<p><img src="/assets/images/vqvae-simple.png" alt="Placeholder for vqvae diagram image" /></p>
+
+<h1 id="image-like-representation-for-audio">Image-like Representation for Audio</h1>
+
+<p>In order to directly apply the VQ-VAE-2 architecture to sounds, we introduce a modified
+version of the Mel-IF representation used in the GANSynth model, which helps the VQ-VAE-2
+learn more robust codes by removing irrelevant noise in the phase at low sound amplitude.
+We furthermore tweak the Mel-scale to make it “more logarithmic” by lowering the <em>break frequency</em>,
+resulting in even more resolution in the lower frequencies.</p>
+
+<p>We take the following sound sample as example (sampled from the validation set of our custom NSynth split).</p>
+
+<audio controls="" preload="none" src="/assets/audio/brass_acoustic_040-069-075.wav" type="audio/wav"> </audio>
+
+<p>On the following figure, we display the original, GANSynth-style Mel-IF representation for this sound,
+without phase thresholding and mel-scale compression. We also show the associated top and bottom codemaps
+obtained from a model trained on this representation.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th> </th>
+      <th>Amplitude</th>
+      <th>IF</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Original</td>
+      <td><img src="/assets/images/spectrograms_comparison/vqvae-0839e0/brass_acoustic_040-069-075-20191022-155506-0839e0_156-original-logmel.png" alt="" /></td>
+      <td><img src="/assets/images/spectrograms_comparison/vqvae-0839e0/brass_acoustic_040-069-075-20191022-155506-0839e0_156-original-IF.png" alt="" /></td>
+    </tr>
+    <tr>
+      <td>Reconstruction</td>
+      <td><img src="/assets/images/spectrograms_comparison/vqvae-0839e0/brass_acoustic_040-069-075-20191022-155506-0839e0_156-reconstruction-logmel.png" alt="" /></td>
+      <td><img src="/assets/images/spectrograms_comparison/vqvae-0839e0/brass_acoustic_040-069-075-20191022-155506-0839e0_156-reconstruction-IF.png" alt="" /></td>
+    </tr>
+  </tbody>
+</table>
+
+<table>
+  <thead>
+    <tr>
+      <th> </th>
+      <th>Top</th>
+      <th>Bottom</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Codemaps</td>
+      <td><img src="/assets/images/spectrograms_comparison/vqvae-0839e0/brass_acoustic_040-069-075-20191022-155506-0839e0_156-top.png" alt="" /></td>
+      <td><img src="/assets/images/spectrograms_comparison/vqvae-0839e0/brass_acoustic_040-069-075-20191022-155506-0839e0_156-bottom.png" alt="" /></td>
+    </tr>
+  </tbody>
+</table>
+
+<p>We now show the same spectrogram using our modified representation and the associated codemaps,
+obtained from a VQ-VAE-2 trained on these representations.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th> </th>
+      <th>Amplitude</th>
+      <th>IF</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Original</td>
+      <td><img src="/assets/images/spectrograms_comparison/vqvae-d006ab/brass_acoustic_040-069-075-20200309-220303-d006ab_436-original-logmel.png" alt="" /></td>
+      <td><img src="/assets/images/spectrograms_comparison/vqvae-d006ab/brass_acoustic_040-069-075-20200309-220303-d006ab_436-original-IF.png" alt="" /></td>
+    </tr>
+    <tr>
+      <td>Reconstruction</td>
+      <td><img src="/assets/images/spectrograms_comparison/vqvae-d006ab/brass_acoustic_040-069-075-20200309-220303-d006ab_436-reconstruction-logmel.png" alt="" /></td>
+      <td><img src="/assets/images/spectrograms_comparison/vqvae-d006ab/brass_acoustic_040-069-075-20200309-220303-d006ab_436-reconstruction-IF.png" alt="" /></td>
+    </tr>
+  </tbody>
+</table>
+
+<table>
+  <thead>
+    <tr>
+      <th> </th>
+      <th>Top</th>
+      <th>Bottom</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Codemaps</td>
+      <td><img src="/assets/images/spectrograms_comparison/vqvae-d006ab/brass_acoustic_040-069-075-20200309-220303-d006ab_436-top.png" alt="" /></td>
+      <td><img src="/assets/images/spectrograms_comparison/vqvae-d006ab/brass_acoustic_040-069-075-20200309-220303-d006ab_436-bottom.png" alt="" /></td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Note how the last three columns of the bottom codemap show large homogeneous zones with the same value,
+the transformation indeed pushed the VQ-VAE to learn a more robust representation where silent zones are
+assigned the same code.</p>
+
+<h1 id="sequence-masked-transformers-for-inpainting">Sequence-masked Transformers for Inpainting</h1>
+
+<p>Sampling new sounds can now be done dy directly sampling from the joint probability of top and bottom codemaps:
+\[ p(c^{T}, c^{B}) \]
+This probability can be readily factorized using the classic Bayes-rule
+into the following product of conditional probabilities \[ p(c^{T}, c^{B}) = p(c^{T}) p(c^{B} | c^{T}) \]</p>
+
+<p>We model these two probabilities using two distinct autoregressive Transformers.
+Since we also want to perform inpainting on the generated sounds,
+that is, resample single tokens in the codemaps for interactive generation,
+the chosen modeling must allow to account for both the past and future context of each token.</p>
+
+<p>For the top codemaps, we selectively incorporate information from the relevant future tokens
+using a boolean mask \( m \), the <em>inpainting</em> mask.</p>
+
+<p>\[
+p(c^{T}) \rightsquigarrow{} { p(c^{T}_i | c^{T}_{&lt;i}, m \odot{} c^{T}_{\geq{}i}) }
+\]</p>
+
+<p>For the bottom codemap, we perform common autoregressive modeling whilst incorporating
+conditioning from the top codemap:</p>
+
+<p>\[
+p(c^{B} \vert c^{T}) = \prod_i{ p(c^{B}_i | c^{B}_{&lt;i}, c^{T}) }
+\]</p>
+
+<p>The complete inpainting process is represented in this diagram:</p>
+
+<p class="full-size"><img src="/assets/images/inpainting_process.png" alt="Placeholder for proposed approach diagram" /></p>
+
+<p>On the right-hand side of this diagram we can see the inpainting procedure in action:</p>
+
+<ol>
+  <li>The codemaps extracted by the VQ-VAE-2 encoder are linearized and fed to the Transformers (see paper for details on the linearization scheme),</li>
+  <li>The token circled in pink from the top map is resampled using the conditional probability computed by the top Transformer,</li>
+  <li>The underlying tokens in the aligned bottom map are resampled according to the conditional probabilities computed by the bottom Transformers.</li>
+  <li>The resulting, inpainted codemaps are decoded back to a spectrogram using the VQ-VAE-2 decoder.</li>
+</ol>
+
+<h1 id="experiments">Experiments</h1>
+
+<p>We now present audio samples for the different components of our approach.</p>
+
+<p>The models were trained on the NSynth dataset, using a custom 80/20 train/valid split since the original was made across instrument types, which is not relevant for our approach.</p>
+
+<h2 id="vq-vae-reconstructions">VQ-VAE reconstructions</h2>
+
+<p>For this first experiment, we only showcase the trained VQ-VAE’s reconstruction ability.</p>
+
+<p>The experimental setup is as follows: we sample 16 random examples from the NSynth validation split and compute their reconstruction using the VQ-VAE-2 encoder.
+The following (scrollable) table displays the audio and the spectrograms for the original and reconstructed spectrograms.
+We discuss some noticeable artifacts thereafter, using the <span class="highlight wrong">highlighted samples</span> as reference.</p>
+
+<div>
+<table class="tableFixHead tableDoubleRows">
+<colgroup>
+<col />
+<col />
+<col />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Kind + Audio</th>
+<th>Mel-Amplitude</th>
+<th>Mel-IF</th>
+</tr>
+</thead>
+<tbody>
+
+
+
+
+    
+    
+    
+    
+    
+    <tr>
+        <!-- <td> Orig. </td> -->
+        <td>
+            Original
+            <br />
+            <br />
+            <audio controls="" preload="none">
+                
+                    <source src="/assets/audio/reconstructions/organ_electronic_102-031-075-original.wav" alt="sample" type="audio/wav" />
+                
+            </audio>
+        </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/organ_electronic_102-031-075-original-logmel.png" alt="organ_electronic_102-031-075-original-logmel" width="100%" height="100%" />
+            </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/organ_electronic_102-031-075-original-IF.png" alt="organ_electronic_102-031-075-original-IF" width="100%" height="100%" />
+            </td>
+        
+    </tr>
+    
+    <tr>
+        <!-- <td> Reco. </td> -->
+        <td>
+            Reconstruction
+            <br />
+            <br />
+            <audio controls="" preload="none">
+                
+                    <source src="/assets/audio/reconstructions/organ_electronic_102-031-075-reconstruction.wav" alt="sample" type="audio/wav" />
+                
+            </audio>
+        </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/organ_electronic_102-031-075-reconstruction-logmel.png" alt="organ_electronic_102-031-075-reconstruction-logmel" width="100%" height="100%" />
+            </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/organ_electronic_102-031-075-reconstruction-IF.png" alt="organ_electronic_102-031-075-reconstruction-IF" width="100%" height="100%" />
+            </td>
+        
+    </tr>
+    
+    <!-- <tr> <td> </td> <td> </td> <td> </td> </tr> -->
+
+    
+    
+    
+    
+    
+    <tr>
+        <!-- <td> Orig. </td> -->
+        <td>
+            Original
+            <br />
+            <br />
+            <audio controls="" preload="none">
+                
+                    <source src="/assets/audio/reconstructions/bass_synthetic_105-041-050-original.wav" alt="sample" type="audio/wav" />
+                
+            </audio>
+        </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/bass_synthetic_105-041-050-original-logmel.png" alt="bass_synthetic_105-041-050-original-logmel" width="100%" height="100%" />
+            </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/bass_synthetic_105-041-050-original-IF.png" alt="bass_synthetic_105-041-050-original-IF" width="100%" height="100%" />
+            </td>
+        
+    </tr>
+    
+    <tr>
+        <!-- <td> Reco. </td> -->
+        <td>
+            Reconstruction
+            <br />
+            <br />
+            <audio controls="" preload="none">
+                
+                    <source src="/assets/audio/reconstructions/bass_synthetic_105-041-050-reconstruction.wav" alt="sample" type="audio/wav" />
+                
+            </audio>
+        </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/bass_synthetic_105-041-050-reconstruction-logmel.png" alt="bass_synthetic_105-041-050-reconstruction-logmel" width="100%" height="100%" />
+            </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/bass_synthetic_105-041-050-reconstruction-IF.png" alt="bass_synthetic_105-041-050-reconstruction-IF" width="100%" height="100%" />
+            </td>
+        
+    </tr>
+    
+    <!-- <tr> <td> </td> <td> </td> <td> </td> </tr> -->
+
+    
+    
+    
+    
+    
+    <tr>
+        <!-- <td> Orig. </td> -->
+        <td>
+            Original
+            <br />
+            <br />
+            <audio controls="" preload="none">
+                
+                    <source src="/assets/audio/reconstructions/mallet_acoustic_000-072-127-original.wav" alt="sample" type="audio/wav" />
+                
+            </audio>
+        </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/mallet_acoustic_000-072-127-original-logmel.png" alt="mallet_acoustic_000-072-127-original-logmel" width="100%" height="100%" />
+            </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/mallet_acoustic_000-072-127-original-IF.png" alt="mallet_acoustic_000-072-127-original-IF" width="100%" height="100%" />
+            </td>
+        
+    </tr>
+    
+    <tr>
+        <!-- <td> Reco. </td> -->
+        <td>
+            Reconstruction
+            <br />
+            <br />
+            <audio controls="" preload="none">
+                
+                    <source src="/assets/audio/reconstructions/mallet_acoustic_000-072-127-reconstruction.wav" alt="sample" type="audio/wav" />
+                
+            </audio>
+        </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/mallet_acoustic_000-072-127-reconstruction-logmel.png" alt="mallet_acoustic_000-072-127-reconstruction-logmel" width="100%" height="100%" />
+            </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/mallet_acoustic_000-072-127-reconstruction-IF.png" alt="mallet_acoustic_000-072-127-reconstruction-IF" width="100%" height="100%" />
+            </td>
+        
+    </tr>
+    
+    <!-- <tr> <td> </td> <td> </td> <td> </td> </tr> -->
+
+    
+    
+    
+    
+    
+    <tr>
+        <!-- <td> Orig. </td> -->
+        <td>
+            Original
+            <br />
+            <br />
+            <audio controls="" preload="none">
+                
+                    <source src="/assets/audio/reconstructions/flute_acoustic_003-054-127-original.wav" alt="sample" type="audio/wav" />
+                
+            </audio>
+        </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/flute_acoustic_003-054-127-original-logmel.png" alt="flute_acoustic_003-054-127-original-logmel" width="100%" height="100%" />
+            </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/flute_acoustic_003-054-127-original-IF.png" alt="flute_acoustic_003-054-127-original-IF" width="100%" height="100%" />
+            </td>
+        
+    </tr>
+    
+    <tr>
+        <!-- <td> Reco. </td> -->
+        <td>
+            Reconstruction
+            <br />
+            <br />
+            <audio controls="" preload="none">
+                
+                    <source src="/assets/audio/reconstructions/flute_acoustic_003-054-127-reconstruction.wav" alt="sample" type="audio/wav" />
+                
+            </audio>
+        </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/flute_acoustic_003-054-127-reconstruction-logmel.png" alt="flute_acoustic_003-054-127-reconstruction-logmel" width="100%" height="100%" />
+            </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/flute_acoustic_003-054-127-reconstruction-IF.png" alt="flute_acoustic_003-054-127-reconstruction-IF" width="100%" height="100%" />
+            </td>
+        
+    </tr>
+    
+    <!-- <tr> <td> </td> <td> </td> <td> </td> </tr> -->
+
+    
+    
+    
+    
+    
+    <tr>
+        <!-- <td> Orig. </td> -->
+        <td>
+            Original
+            <br />
+            <br />
+            <audio controls="" preload="none">
+                
+                    <source src="/assets/audio/reconstructions/keyboard_electronic_065-056-075-original.wav" alt="sample" type="audio/wav" />
+                
+            </audio>
+        </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/keyboard_electronic_065-056-075-original-logmel.png" alt="keyboard_electronic_065-056-075-original-logmel" width="100%" height="100%" />
+            </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/keyboard_electronic_065-056-075-original-IF.png" alt="keyboard_electronic_065-056-075-original-IF" width="100%" height="100%" />
+            </td>
+        
+    </tr>
+    
+    <tr>
+        <!-- <td> Reco. </td> -->
+        <td>
+            Reconstruction
+            <br />
+            <br />
+            <audio controls="" preload="none">
+                
+                    <source src="/assets/audio/reconstructions/keyboard_electronic_065-056-075-reconstruction.wav" alt="sample" type="audio/wav" />
+                
+            </audio>
+        </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/keyboard_electronic_065-056-075-reconstruction-logmel.png" alt="keyboard_electronic_065-056-075-reconstruction-logmel" width="100%" height="100%" />
+            </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/keyboard_electronic_065-056-075-reconstruction-IF.png" alt="keyboard_electronic_065-056-075-reconstruction-IF" width="100%" height="100%" />
+            </td>
+        
+    </tr>
+    
+    <!-- <tr> <td> </td> <td> </td> <td> </td> </tr> -->
+
+    
+    
+    
+    
+    
+    <tr>
+        <!-- <td> Orig. </td> -->
+        <td>
+            Original
+            <br />
+            <br />
+            <audio controls="" preload="none">
+                
+                    <source src="/assets/audio/reconstructions/mallet_electronic_001-075-025-original.wav" alt="sample" type="audio/wav" />
+                
+            </audio>
+        </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/mallet_electronic_001-075-025-original-logmel.png" alt="mallet_electronic_001-075-025-original-logmel" width="100%" height="100%" />
+            </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/mallet_electronic_001-075-025-original-IF.png" alt="mallet_electronic_001-075-025-original-IF" width="100%" height="100%" />
+            </td>
+        
+    </tr>
+    
+    <tr>
+        <!-- <td> Reco. </td> -->
+        <td>
+            Reconstruction
+            <br />
+            <br />
+            <audio controls="" preload="none">
+                
+                    <source src="/assets/audio/reconstructions/mallet_electronic_001-075-025-reconstruction.wav" alt="sample" type="audio/wav" />
+                
+            </audio>
+        </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/mallet_electronic_001-075-025-reconstruction-logmel.png" alt="mallet_electronic_001-075-025-reconstruction-logmel" width="100%" height="100%" />
+            </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/mallet_electronic_001-075-025-reconstruction-IF.png" alt="mallet_electronic_001-075-025-reconstruction-IF" width="100%" height="100%" />
+            </td>
+        
+    </tr>
+    
+    <!-- <tr> <td> </td> <td> </td> <td> </td> </tr> -->
+
+    
+    
+    
+    
+    
+    <tr>
+        <!-- <td> Orig. </td> -->
+        <td>
+            Original
+            <br />
+            <br />
+            <audio controls="" preload="none">
+                
+                    <source src="/assets/audio/reconstructions/keyboard_acoustic_003-061-075-original.wav" alt="sample" type="audio/wav" />
+                
+            </audio>
+        </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/keyboard_acoustic_003-061-075-original-logmel.png" alt="keyboard_acoustic_003-061-075-original-logmel" width="100%" height="100%" />
+            </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/keyboard_acoustic_003-061-075-original-IF.png" alt="keyboard_acoustic_003-061-075-original-IF" width="100%" height="100%" />
+            </td>
+        
+    </tr>
+    
+    <tr>
+        <!-- <td> Reco. </td> -->
+        <td>
+            Reconstruction
+            <br />
+            <br />
+            <audio controls="" preload="none">
+                
+                    <source src="/assets/audio/reconstructions/keyboard_acoustic_003-061-075-reconstruction.wav" alt="sample" type="audio/wav" />
+                
+            </audio>
+        </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/keyboard_acoustic_003-061-075-reconstruction-logmel.png" alt="keyboard_acoustic_003-061-075-reconstruction-logmel" width="100%" height="100%" />
+            </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/keyboard_acoustic_003-061-075-reconstruction-IF.png" alt="keyboard_acoustic_003-061-075-reconstruction-IF" width="100%" height="100%" />
+            </td>
+        
+    </tr>
+    
+    <!-- <tr> <td> </td> <td> </td> <td> </td> </tr> -->
+
+    
+    
+    
+    
+    
+    <tr>
+        <!-- <td> Orig. </td> -->
+        <td>
+            Original
+            <br />
+            <br />
+            <audio controls="" preload="none">
+                
+                    <source src="/assets/audio/reconstructions/reed_acoustic_042-064-025-original.wav" alt="sample" type="audio/wav" />
+                
+            </audio>
+        </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/reed_acoustic_042-064-025-original-logmel.png" alt="reed_acoustic_042-064-025-original-logmel" width="100%" height="100%" />
+            </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/reed_acoustic_042-064-025-original-IF.png" alt="reed_acoustic_042-064-025-original-IF" width="100%" height="100%" />
+            </td>
+        
+    </tr>
+    
+    <tr>
+        <!-- <td> Reco. </td> -->
+        <td>
+            Reconstruction
+            <br />
+            <br />
+            <audio controls="" preload="none">
+                
+                    <source src="/assets/audio/reconstructions/reed_acoustic_042-064-025-reconstruction.wav" alt="sample" type="audio/wav" />
+                
+            </audio>
+        </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/reed_acoustic_042-064-025-reconstruction-logmel.png" alt="reed_acoustic_042-064-025-reconstruction-logmel" width="100%" height="100%" />
+            </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/reed_acoustic_042-064-025-reconstruction-IF.png" alt="reed_acoustic_042-064-025-reconstruction-IF" width="100%" height="100%" />
+            </td>
+        
+    </tr>
+    
+    <!-- <tr> <td> </td> <td> </td> <td> </td> </tr> -->
+
+    
+    
+    
+    
+    
+    <tr>
+        <!-- <td> Orig. </td> -->
+        <td>
+            Original
+            <br />
+            <br />
+            <audio controls="" preload="none">
+                
+                    <source src="/assets/audio/reconstructions/guitar_acoustic_016-065-050-original.wav" alt="sample" type="audio/wav" />
+                
+            </audio>
+        </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/guitar_acoustic_016-065-050-original-logmel.png" alt="guitar_acoustic_016-065-050-original-logmel" width="100%" height="100%" />
+            </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/guitar_acoustic_016-065-050-original-IF.png" alt="guitar_acoustic_016-065-050-original-IF" width="100%" height="100%" />
+            </td>
+        
+    </tr>
+    
+    <tr>
+        <!-- <td> Reco. </td> -->
+        <td>
+            Reconstruction
+            <br />
+            <br />
+            <audio controls="" preload="none">
+                
+                    <source src="/assets/audio/reconstructions/guitar_acoustic_016-065-050-reconstruction.wav" alt="sample" type="audio/wav" />
+                
+            </audio>
+        </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/guitar_acoustic_016-065-050-reconstruction-logmel.png" alt="guitar_acoustic_016-065-050-reconstruction-logmel" width="100%" height="100%" />
+            </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/guitar_acoustic_016-065-050-reconstruction-IF.png" alt="guitar_acoustic_016-065-050-reconstruction-IF" width="100%" height="100%" />
+            </td>
+        
+    </tr>
+    
+    <!-- <tr> <td> </td> <td> </td> <td> </td> </tr> -->
+
+    
+    
+    
+    
+    
+    <tr>
+        <!-- <td> Orig. </td> -->
+        <td>
+            Original
+            <br />
+            <br />
+            <audio controls="" preload="none">
+                
+                    <source src="/assets/audio/reconstructions/synth_lead_synthetic_011-037-025-original.wav" alt="sample" type="audio/wav" />
+                
+            </audio>
+        </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/synth_lead_synthetic_011-037-025-original-logmel.png" alt="synth_lead_synthetic_011-037-025-original-logmel" width="100%" height="100%" />
+            </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/synth_lead_synthetic_011-037-025-original-IF.png" alt="synth_lead_synthetic_011-037-025-original-IF" width="100%" height="100%" />
+            </td>
+        
+    </tr>
+    
+    <tr>
+        <!-- <td> Reco. </td> -->
+        <td>
+            Reconstruction
+            <br />
+            <br />
+            <audio controls="" preload="none">
+                
+                    <source src="/assets/audio/reconstructions/synth_lead_synthetic_011-037-025-reconstruction.wav" alt="sample" type="audio/wav" />
+                
+            </audio>
+        </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/synth_lead_synthetic_011-037-025-reconstruction-logmel.png" alt="synth_lead_synthetic_011-037-025-reconstruction-logmel" width="100%" height="100%" />
+            </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/synth_lead_synthetic_011-037-025-reconstruction-IF.png" alt="synth_lead_synthetic_011-037-025-reconstruction-IF" width="100%" height="100%" />
+            </td>
+        
+    </tr>
+    
+    <!-- <tr> <td> </td> <td> </td> <td> </td> </tr> -->
+
+    
+    
+    
+    
+    
+    <tr>
+        <!-- <td> Orig. </td> -->
+        <td>
+            Original
+            <br />
+            <br />
+            <audio controls="" preload="none">
+                
+                    <source src="/assets/audio/reconstructions/reed_acoustic_060-072-025-original.wav" alt="sample" type="audio/wav" />
+                
+            </audio>
+        </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/reed_acoustic_060-072-025-original-logmel.png" alt="reed_acoustic_060-072-025-original-logmel" width="100%" height="100%" />
+            </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/reed_acoustic_060-072-025-original-IF.png" alt="reed_acoustic_060-072-025-original-IF" width="100%" height="100%" />
+            </td>
+        
+    </tr>
+    
+    <tr>
+        <!-- <td> Reco. </td> -->
+        <td>
+            Reconstruction
+            <br />
+            <br />
+            <audio controls="" preload="none">
+                
+                    <source src="/assets/audio/reconstructions/reed_acoustic_060-072-025-reconstruction.wav" alt="sample" type="audio/wav" />
+                
+            </audio>
+        </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/reed_acoustic_060-072-025-reconstruction-logmel.png" alt="reed_acoustic_060-072-025-reconstruction-logmel" width="100%" height="100%" />
+            </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/reed_acoustic_060-072-025-reconstruction-IF.png" alt="reed_acoustic_060-072-025-reconstruction-IF" width="100%" height="100%" />
+            </td>
+        
+    </tr>
+    
+    <!-- <tr> <td> </td> <td> </td> <td> </td> </tr> -->
+
+    
+    
+    
+    
+    
+    <tr>
+        <!-- <td> Orig. </td> -->
+        <td>
+            Original
+            <br />
+            <br />
+            <audio controls="" preload="none">
+                
+                    <source src="/assets/audio/reconstructions/synth_lead_synthetic_008-078-025-original.wav" alt="sample" type="audio/wav" />
+                
+            </audio>
+        </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/synth_lead_synthetic_008-078-025-original-logmel.png" alt="synth_lead_synthetic_008-078-025-original-logmel" width="100%" height="100%" />
+            </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/synth_lead_synthetic_008-078-025-original-IF.png" alt="synth_lead_synthetic_008-078-025-original-IF" width="100%" height="100%" />
+            </td>
+        
+    </tr>
+    
+    <tr>
+        <!-- <td> Reco. </td> -->
+        <td>
+            Reconstruction
+            <br />
+            <br />
+            <audio controls="" preload="none">
+                
+                    <source src="/assets/audio/reconstructions/synth_lead_synthetic_008-078-025-reconstruction.wav" alt="sample" type="audio/wav" />
+                
+            </audio>
+        </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/synth_lead_synthetic_008-078-025-reconstruction-logmel.png" alt="synth_lead_synthetic_008-078-025-reconstruction-logmel" width="100%" height="100%" />
+            </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/synth_lead_synthetic_008-078-025-reconstruction-IF.png" alt="synth_lead_synthetic_008-078-025-reconstruction-IF" width="100%" height="100%" />
+            </td>
+        
+    </tr>
+    
+    <!-- <tr> <td> </td> <td> </td> <td> </td> </tr> -->
+
+    
+    
+    
+    
+    
+    <tr class="highlight wrong">
+        <!-- <td> Orig. </td> -->
+        <td>
+            Original
+            <br />
+            <br />
+            <audio controls="" preload="none">
+                
+                    <source src="/assets/audio/reconstructions/string_acoustic_088-068-100-original.wav" alt="sample" type="audio/wav" />
+                
+            </audio>
+        </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/string_acoustic_088-068-100-original-logmel.png" alt="string_acoustic_088-068-100-original-logmel" width="100%" height="100%" />
+            </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/string_acoustic_088-068-100-original-IF.png" alt="string_acoustic_088-068-100-original-IF" width="100%" height="100%" />
+            </td>
+        
+    </tr>
+    
+    <tr class="highlight wrong">
+        <!-- <td> Reco. </td> -->
+        <td>
+            Reconstruction
+            <br />
+            <br />
+            <audio controls="" preload="none">
+                
+                    <source src="/assets/audio/reconstructions/string_acoustic_088-068-100-reconstruction.wav" alt="sample" type="audio/wav" />
+                
+            </audio>
+        </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/string_acoustic_088-068-100-reconstruction-logmel.png" alt="string_acoustic_088-068-100-reconstruction-logmel" width="100%" height="100%" />
+            </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/string_acoustic_088-068-100-reconstruction-IF.png" alt="string_acoustic_088-068-100-reconstruction-IF" width="100%" height="100%" />
+            </td>
+        
+    </tr>
+    
+    <!-- <tr> <td> </td> <td> </td> <td> </td> </tr> -->
+
+    
+    
+    
+    
+    
+    <tr>
+        <!-- <td> Orig. </td> -->
+        <td>
+            Original
+            <br />
+            <br />
+            <audio controls="" preload="none">
+                
+                    <source src="/assets/audio/reconstructions/bass_synthetic_042-047-100-original.wav" alt="sample" type="audio/wav" />
+                
+            </audio>
+        </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/bass_synthetic_042-047-100-original-logmel.png" alt="bass_synthetic_042-047-100-original-logmel" width="100%" height="100%" />
+            </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/bass_synthetic_042-047-100-original-IF.png" alt="bass_synthetic_042-047-100-original-IF" width="100%" height="100%" />
+            </td>
+        
+    </tr>
+    
+    <tr>
+        <!-- <td> Reco. </td> -->
+        <td>
+            Reconstruction
+            <br />
+            <br />
+            <audio controls="" preload="none">
+                
+                    <source src="/assets/audio/reconstructions/bass_synthetic_042-047-100-reconstruction.wav" alt="sample" type="audio/wav" />
+                
+            </audio>
+        </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/bass_synthetic_042-047-100-reconstruction-logmel.png" alt="bass_synthetic_042-047-100-reconstruction-logmel" width="100%" height="100%" />
+            </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/bass_synthetic_042-047-100-reconstruction-IF.png" alt="bass_synthetic_042-047-100-reconstruction-IF" width="100%" height="100%" />
+            </td>
+        
+    </tr>
+    
+    <!-- <tr> <td> </td> <td> </td> <td> </td> </tr> -->
+
+    
+    
+    
+    
+    
+    <tr class="highlight wrong">
+        <!-- <td> Orig. </td> -->
+        <td>
+            Original
+            <br />
+            <br />
+            <audio controls="" preload="none">
+                
+                    <source src="/assets/audio/reconstructions/keyboard_acoustic_016-078-127-original.wav" alt="sample" type="audio/wav" />
+                
+            </audio>
+        </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/keyboard_acoustic_016-078-127-original-logmel.png" alt="keyboard_acoustic_016-078-127-original-logmel" width="100%" height="100%" />
+            </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/keyboard_acoustic_016-078-127-original-IF.png" alt="keyboard_acoustic_016-078-127-original-IF" width="100%" height="100%" />
+            </td>
+        
+    </tr>
+    
+    <tr class="highlight wrong">
+        <!-- <td> Reco. </td> -->
+        <td>
+            Reconstruction
+            <br />
+            <br />
+            <audio controls="" preload="none">
+                
+                    <source src="/assets/audio/reconstructions/keyboard_acoustic_016-078-127-reconstruction.wav" alt="sample" type="audio/wav" />
+                
+            </audio>
+        </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/keyboard_acoustic_016-078-127-reconstruction-logmel.png" alt="keyboard_acoustic_016-078-127-reconstruction-logmel" width="100%" height="100%" />
+            </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/keyboard_acoustic_016-078-127-reconstruction-IF.png" alt="keyboard_acoustic_016-078-127-reconstruction-IF" width="100%" height="100%" />
+            </td>
+        
+    </tr>
+    
+    <!-- <tr> <td> </td> <td> </td> <td> </td> </tr> -->
+
+    
+    
+    
+    
+    
+    <tr>
+        <!-- <td> Orig. </td> -->
+        <td>
+            Original
+            <br />
+            <br />
+            <audio controls="" preload="none">
+                
+                    <source src="/assets/audio/reconstructions/vocal_acoustic_025-065-127-original.wav" alt="sample" type="audio/wav" />
+                
+            </audio>
+        </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/vocal_acoustic_025-065-127-original-logmel.png" alt="vocal_acoustic_025-065-127-original-logmel" width="100%" height="100%" />
+            </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/vocal_acoustic_025-065-127-original-IF.png" alt="vocal_acoustic_025-065-127-original-IF" width="100%" height="100%" />
+            </td>
+        
+    </tr>
+    
+    <tr>
+        <!-- <td> Reco. </td> -->
+        <td>
+            Reconstruction
+            <br />
+            <br />
+            <audio controls="" preload="none">
+                
+                    <source src="/assets/audio/reconstructions/vocal_acoustic_025-065-127-reconstruction.wav" alt="sample" type="audio/wav" />
+                
+            </audio>
+        </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/vocal_acoustic_025-065-127-reconstruction-logmel.png" alt="vocal_acoustic_025-065-127-reconstruction-logmel" width="100%" height="100%" />
+            </td>
+        
+            <td>
+                <img src="/assets/images/reconstructions/vocal_acoustic_025-065-127-reconstruction-IF.png" alt="vocal_acoustic_025-065-127-reconstruction-IF" width="100%" height="100%" />
+            </td>
+        
+    </tr>
+    
+    <!-- <tr> <td> </td> <td> </td> <td> </td> </tr> -->
+
+</tbody>
+</table>
+</div>
+
+<h3 id="discussion">Discussion</h3>
+
+<p>From these examples we can note that reconstruction with this highly compressed model
+is good, in the sense the overall timbre is indeed reproduced for each of the samples, yet it is not perfect.</p>
+
+<h4 class="no_toc" id="transients">Transients</h4>
+
+<p>Transient parts, amongst which attacks, tend to be blurred out, such as in the Keyboard - 78 example, reproduced below.</p>
+
+<table>
+    <colgroup>
+    <col />
+    <col />
+    <col />
+    </colgroup>
+    <thead>
+    <tr class="header">
+    <th>Kind + Audio</th>
+    <th>Mel-Amplitude</th>
+    <th>Mel-IF</th>
+    </tr>
+    </thead>
+    <tbody>
+        
+            <tr>
+                <td>
+                    Original
+                    <br />
+                    <br />
+                    <audio controls="" preload="none">
+                        
+                            <source src="/assets/audio/reconstructions/keyboard_acoustic_016-078-127-original.wav" alt="sample" type="audio/wav" />
+                        
+                    </audio>
+                </td>
+                
+                <td>
+                    <img src="/assets/images/reconstructions/keyboard_acoustic_016-078-127-original-logmel.png" alt="keyboard_acoustic_016-078-127-original-logmel" width="100%" height="100%" />
+                </td>
+                
+                <td>
+                    <img src="/assets/images/reconstructions/keyboard_acoustic_016-078-127-original-IF.png" alt="keyboard_acoustic_016-078-127-original-IF" width="100%" height="100%" />
+                </td>
+                
+            </tr>
+        
+            <tr>
+                <td>
+                    Reconstruction
+                    <br />
+                    <br />
+                    <audio controls="" preload="none">
+                        
+                            <source src="/assets/audio/reconstructions/keyboard_acoustic_016-078-127-reconstruction.wav" alt="sample" type="audio/wav" />
+                        
+                    </audio>
+                </td>
+                
+                <td>
+                    <img src="/assets/images/reconstructions/keyboard_acoustic_016-078-127-reconstruction-logmel.png" alt="keyboard_acoustic_016-078-127-reconstruction-logmel" width="100%" height="100%" />
+                </td>
+                
+                <td>
+                    <img src="/assets/images/reconstructions/keyboard_acoustic_016-078-127-reconstruction-IF.png" alt="keyboard_acoustic_016-078-127-reconstruction-IF" width="100%" height="100%" />
+                </td>
+                
+            </tr>
+        
+    </tbody>
+</table>
+
+<p>This is likely cause by the low temporal resolution of the VQ-VAE-2 we employ, where the bottom codemap only operates
+over frames of duration 0.5 second.</p>
+
+<p>This limitation could be directly tackled by increasing the resolution of the codemaps, but at the cost of
+increasing the computational load in the subsequent autoregressive modeling by the Transformers.</p>
+
+<p>Another possible solution would be to add a noise component in the VQ-VAE, effectively turning the
+synthesis process into a <em>harmonics+noise</em> one, as is done in the <a href="ddsp">DDSP model</a>.
+In this model, the network learns to generate both a set of additive harmonics as well as a FIR filter which
+is applied on a noise generator to reconstruct noisy components of the input signal.
+This second technique is grounded in a practice of introducing powerful inductive biases
+into the architecture of a model in order to ease its learning process.</p>
+
+<h4 class="no_toc" id="beating-frequencies">Beating frequencies</h4>
+
+<p>Some undesired beating effects appear on sustained notes. An instance of this is in the reconstruction of the String - 68 sample.</p>
+
+<table>
+    <colgroup>
+    <col />
+    <col />
+    <col />
+    </colgroup>
+    <thead>
+    <tr class="header">
+    <th>Kind + Audio</th>
+    <th>Mel-Amplitude</th>
+    <th>Mel-IF</th>
+    </tr>
+    </thead>
+    <tbody>
+        
+            <tr>
+                <td>
+                    Original
+                    <br />
+                    <br />
+                    <audio controls="" preload="none">
+                        
+                            <source src="/assets/audio/reconstructions/string_acoustic_088-068-100-original.wav" alt="sample" type="audio/wav" />
+                        
+                    </audio>
+                </td>
+                
+                <td>
+                    <img src="/assets/images/reconstructions/string_acoustic_088-068-100-original-logmel.png" alt="string_acoustic_088-068-100-original-logmel" width="100%" height="100%" />
+                </td>
+                
+                <td>
+                    <img src="/assets/images/reconstructions/string_acoustic_088-068-100-original-IF.png" alt="string_acoustic_088-068-100-original-IF" width="100%" height="100%" />
+                </td>
+                
+            </tr>
+        
+            <tr>
+                <td>
+                    Reconstruction
+                    <br />
+                    <br />
+                    <audio controls="" preload="none">
+                        
+                            <source src="/assets/audio/reconstructions/string_acoustic_088-068-100-reconstruction.wav" alt="sample" type="audio/wav" />
+                        
+                    </audio>
+                </td>
+                
+                <td>
+                    <img src="/assets/images/reconstructions/string_acoustic_088-068-100-reconstruction-logmel.png" alt="string_acoustic_088-068-100-reconstruction-logmel" width="100%" height="100%" />
+                </td>
+                
+                <td>
+                    <img src="/assets/images/reconstructions/string_acoustic_088-068-100-reconstruction-IF.png" alt="string_acoustic_088-068-100-reconstruction-IF" width="100%" height="100%" />
+                </td>
+                
+            </tr>
+        
+    </tbody>
+</table>
+
+<p>This could be due to the reconstructed spectrogram being too smooth to reproduce the complex timbre,
+leading to this beating artifacts because of missing harmonics.</p>
+
+<p>A first, somewhat brute-force solution would be to increase the network’s capacity, which can
+be readily done by increasing the codebooks’ size. This would allowing the VQ-VAE to learn a more diverse
+set of spectral patches, again at the cost of increased computational load.</p>
+
+<p>Notwithstanding, adding a noise component to the model could again help it account for this
+variability.</p>
+
+<p>Testing these possible enhancements will be the subject of follow-up work.</p>
+
+<!-- Nevertheless, one should bear in mind the very strong compression induced by the VQ-VAE.
+Indeed, the model weights are only \\(5.7\text{Mb}\\) in size and a 4 seconds sound sampled
+at \\(16kHz\\), representing a \\(128\text{kb}\\) file size, is compressed into a total of
+\\( 640 = 64 * 8 + 32 * 4 \\) 8-bit integers, that is, less than \\(1\text{kb}\\). The model
+in turn was trained to perform appropriate reconstruction on \\(180000\\) training samples with diverse
+timbre. -->
+
+<h2 id="unconditional-generation">Unconditional Generation</h2>
+
+<p>In this second set of experiments, we make use of the Transformers and evaluate their
+ability at generating full sounds without receiving any conditioning except
+pitch and instrument type.</p>
+
+<p>For this sampling procedure, we first autoregressively sample the full top map starting from an initial fully
+masked self-conditioning map. We then sample the full bottom codemap conditioned on this top map.</p>
+
+<p>Our conditioning scheme for global labels is a very simple one: one-hot encodings (along with a learned
+embedding matrix) for both pitch and instrument global labels are concatenated
+to each tokens of the sequences, along with the positional embeddings common in sequence modeling.
+This simple approach readily gives the networks access to the global conditioning information at all positions.
+In particular, the global conditioning is concatenated to the start symbols that are prepended to the sequences
+for autoregressive modeling, allowing to condition the full autoregressive sampling procedure.</p>
+
+<div>
+
+
+<table class="tableFixFirstColumn tableFixHead full-size">
+    <colgroup>
+        <col />
+        
+        <col />
+        
+        <col />
+        
+        <col />
+        
+        <col />
+        
+        <col />
+        
+        <col />
+        
+        <col />
+        
+        <col />
+        
+        <col />
+        
+    </colgroup>
+    <thead>
+        <tr class="header">
+        <th> Instrument </th>
+        
+        <th> MIDI Pitch <span>\(24\)</span> </th>
+        
+        <th> MIDI Pitch <span>\(31\)</span> </th>
+        
+        <th> MIDI Pitch <span>\(38\)</span> </th>
+        
+        <th> MIDI Pitch <span>\(45\)</span> </th>
+        
+        <th> MIDI Pitch <span>\(52\)</span> </th>
+        
+        <th> MIDI Pitch <span>\(59\)</span> </th>
+        
+        <th> MIDI Pitch <span>\(66\)</span> </th>
+        
+        <th> MIDI Pitch <span>\(73\)</span> </th>
+        
+        <th> MIDI Pitch <span>\(80\)</span> </th>
+        
+        </tr>
+    </thead>
+    <tbody>
+    
+        <tr>
+        <th> Bass </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/bass-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/bass-31.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/bass-38.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/bass-45.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/bass-52.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/bass-59.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/bass-66.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/bass-73.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/bass-80.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Brass </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/brass-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/brass-31.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/brass-38.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/brass-45.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/brass-52.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/brass-59.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/brass-66.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/brass-73.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/brass-80.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Flute </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/flute-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/flute-31.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/flute-38.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/flute-45.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/flute-52.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/flute-59.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/flute-66.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/flute-73.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/flute-80.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Guitar </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/guitar-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/guitar-31.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/guitar-38.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/guitar-45.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/guitar-52.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/guitar-59.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/guitar-66.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/guitar-73.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/guitar-80.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Keyboard </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/keyboard-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/keyboard-31.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/keyboard-38.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/keyboard-45.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/keyboard-52.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/keyboard-59.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/keyboard-66.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/keyboard-73.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/keyboard-80.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Mallet </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/mallet-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/mallet-31.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/mallet-38.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/mallet-45.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/mallet-52.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/mallet-59.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/mallet-66.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/mallet-73.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/mallet-80.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Organ </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/organ-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/organ-31.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/organ-38.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/organ-45.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/organ-52.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/organ-59.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/organ-66.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/organ-73.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/organ-80.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Reed </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/reed-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/reed-31.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/reed-38.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/reed-45.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/reed-52.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/reed-59.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/reed-66.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/reed-73.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/reed-80.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> String </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/string-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/string-31.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/string-38.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/string-45.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/string-52.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/string-59.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/string-66.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/string-73.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/string-80.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Synth_lead </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/synth_lead-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/synth_lead-31.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/synth_lead-38.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/synth_lead-45.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/synth_lead-52.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/synth_lead-59.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/synth_lead-66.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/synth_lead-73.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/synth_lead-80.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Vocal </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/vocal-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/vocal-31.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/vocal-38.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/vocal-45.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/vocal-52.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/vocal-59.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/vocal-66.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/vocal-73.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/unconditional_generation/20200309-220303-d006ab_436/vocal-80.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+    </tbody>
+</table>
+</div>
+
+<h3 id="discussion-1">Discussion</h3>
+
+<p>The VQ-VAE/Transformer pair successfully handles pitch and instrument conditioning for the diverse set on instruments in the training set.</p>
+
+<p>We note that it nevertheless sometimes fails to produce the desired pitch, for instance on the Mallet/24 sample,
+where the generated pitch is too high.
+This can be attributed to the fact that pitch 24 is, with 246 occurrences in our train split, one of the least represented
+pitches for the “mallet” instrument family (as shown on the diagram below).
+This, along with the fact that our conditioning scheme imposes no disentanglement of the different conditioning modalities,
+could explain that the networks has a hard time generalizing to this less represented pitch for the given instrument type.</p>
+
+<p><img src="/assets/images/histogram_mallet_pitches.png" alt="Histogram of pitches for the Mallet instrument family" style="width: 80%; margin-left: 10%;" /></p>
+
+<h2 id="inpainting-operations">Inpainting operations</h2>
+
+<p>We now present some applications of the inpainting capabilities of the masked Transformers.
+Reviewers are invited to try out these manipulations on the interactive web interface we built for our models, the link
+of which is to be found in the paper.</p>
+
+<p>Here, we start from a pre-existing sample, either provided by the user or fully generated by autoregressively
+sampling from the distribution modeled by the Transformers. We then select and resample specific zones in these codemaps,
+which can be done in a context-aware fashion using the masking procedure introduced in the Transformers.</p>
+
+<p>The two different layers of the VQ-VAE allow to perform sonic transformations at different scales.
+By editing the top codemap, on which the bottom codemap is, in turn, conditioned,
+one can perform radical changes on the existing sound</p>
+
+<p>We perform all our demonstrations on the following sample, taken from the official NSynth test split:</p>
+
+<table class="center-table">
+  <thead>
+    <tr>
+      <th>Audio</th>
+      <th>Name</th>
+      <th>Instrument family</th>
+      <th>Pitch</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><audio controls="" preload="none" src="/assets/audio/organ_electronic_028-048-050.wav" format="audio/wav"></audio></td>
+      <td>organ_electronic_028-048-050</td>
+      <td>Organ</td>
+      <td>48</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>We perform different experiments using all instrument types across a wide range of pitch constraints.</p>
+
+<p>For each combination of pitch and instrument constraints in the following tasks, we sample four independent examples from our models,
+which are played in succession in the audio files presented.</p>
+
+<h3 id="temporal-inpainting">Temporal inpainting</h3>
+
+<p>For this first set of experiments, we regenerate the first two seconds of both the top and bottom codemaps in succession.</p>
+
+<p>This amounts to the following interaction on the interactive interface we propose:</p>
+
+<video controls="" preload="auto" src="/assets/video/temporal_inpainting.webm" format="video/webm">
+</video>
+
+<p>The results are presented in the following table.</p>
+
+<div>
+
+
+<table class="tableFixFirstColumn tableFixHead full-size">
+    <colgroup>
+        <col />
+        
+        <col />
+        
+        <col />
+        
+        <col />
+        
+        <col />
+        
+        <col />
+        
+        <col />
+        
+        <col />
+        
+        <col />
+        
+    </colgroup>
+    <thead>
+        <tr class="header">
+        <th> Instrument </th>
+        
+        <th> MIDI Pitch <span>\(24\)</span> </th>
+        
+        <th> MIDI Pitch <span>\(36\)</span> </th>
+        
+        <th> MIDI Pitch <span>\(43\)</span> </th>
+        
+        <th> MIDI Pitch <span>\(48\)</span> </th>
+        
+        <th> MIDI Pitch <span>\(60\)</span> </th>
+        
+        <th> MIDI Pitch <span>\(64\)</span> </th>
+        
+        <th> MIDI Pitch <span>\(67\)</span> </th>
+        
+        <th> MIDI Pitch <span>\(72\)</span> </th>
+        
+        </tr>
+    </thead>
+    <tbody>
+    
+        <tr>
+        <th> Bass </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/bass-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/bass-36.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/bass-43.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/bass-48.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/bass-60.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/bass-64.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/bass-67.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/bass-72.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Brass </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/brass-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/brass-36.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/brass-43.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/brass-48.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/brass-60.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/brass-64.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/brass-67.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/brass-72.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Flute </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/flute-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/flute-36.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/flute-43.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/flute-48.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/flute-60.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/flute-64.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/flute-67.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/flute-72.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Guitar </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/guitar-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/guitar-36.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/guitar-43.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/guitar-48.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/guitar-60.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/guitar-64.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/guitar-67.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/guitar-72.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Keyboard </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/keyboard-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/keyboard-36.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/keyboard-43.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/keyboard-48.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/keyboard-60.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/keyboard-64.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/keyboard-67.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/keyboard-72.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Mallet </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/mallet-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/mallet-36.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/mallet-43.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/mallet-48.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/mallet-60.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/mallet-64.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/mallet-67.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/mallet-72.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Organ </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/organ-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/organ-36.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/organ-43.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/organ-48.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/organ-60.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/organ-64.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/organ-67.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/organ-72.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Reed </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/reed-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/reed-36.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/reed-43.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/reed-48.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/reed-60.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/reed-64.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/reed-67.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/reed-72.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> String </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/string-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/string-36.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/string-43.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/string-48.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/string-60.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/string-64.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/string-67.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/string-72.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Synth_lead </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/synth_lead-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/synth_lead-36.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/synth_lead-43.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/synth_lead-48.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/synth_lead-60.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/synth_lead-64.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/synth_lead-67.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/synth_lead-72.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Vocal </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/vocal-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/vocal-36.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/vocal-43.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/vocal-48.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/vocal-60.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/vocal-64.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/vocal-67.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/two_seconds_all_frequencies/vocal-72.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+    </tbody>
+</table>
+</div>
+
+<h3 id="frequency-inpainting">Frequency inpainting</h3>
+
+<p>In this second set of experiments, we regenerate the lower fourth of both the top and bottom codemaps in succession.
+This transformation can be used to add bottom-frequency content to a sound. In particular, the bass and organ constraints
+with a low pitch constraint allow to bring more depth to a sound, as can be heard on the provided examples.</p>
+
+<p>This amounts to the following interaction on our interactive interface:</p>
+
+<video controls="" preload="auto" src="/assets/video/frequency_inpainting.webm" format="video/webm">
+</video>
+
+<p>Note that we restrict the set of constraint pitches to only the lower ones, relevant to this inpainting task.</p>
+
+<div style="width: min-content; margin: auto;">
+
+
+<table class="tableFixFirstColumn tableFixHead" style="padding-right: 17px;">
+    <colgroup>
+        <col />
+        
+        <col />
+        
+        <col />
+        
+        <col />
+        
+        <col />
+        
+    </colgroup>
+    <thead>
+        <tr class="header">
+        <th> Instrument </th>
+        
+        <th> MIDI Pitch <span>\(24\)</span> </th>
+        
+        <th> MIDI Pitch <span>\(36\)</span> </th>
+        
+        <th> MIDI Pitch <span>\(43\)</span> </th>
+        
+        <th> MIDI Pitch <span>\(48\)</span> </th>
+        
+        </tr>
+    </thead>
+    <tbody>
+    
+        <tr>
+        <th> Bass </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/bass-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/bass-36.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/bass-43.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/bass-48.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Brass </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/brass-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/brass-36.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/brass-43.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/brass-48.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Flute </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/flute-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/flute-36.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/flute-43.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/flute-48.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Guitar </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/guitar-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/guitar-36.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/guitar-43.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/guitar-48.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Keyboard </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/keyboard-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/keyboard-36.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/keyboard-43.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/keyboard-48.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Mallet </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/mallet-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/mallet-36.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/mallet-43.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/mallet-48.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Organ </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/organ-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/organ-36.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/organ-43.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/organ-48.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Reed </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/reed-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/reed-36.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/reed-43.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/reed-48.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> String </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/string-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/string-36.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/string-43.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/string-48.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Synth_lead </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/synth_lead-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/synth_lead-36.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/synth_lead-43.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/synth_lead-48.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Vocal </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/vocal-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/vocal-36.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/vocal-43.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/all_duration_bottom_quarter_frequencies/vocal-48.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+    </tbody>
+</table>
+</div>
+
+<h3 id="keep-the-top-regenerate-the-bottom">Keep the top, regenerate the bottom</h3>
+
+<p>In this third and last set of experiments, we keep the top codemap unchanged and regenerate the full bottom codemap conditioned on it.
+According to the hierarchical structure of the model, this can be expected to transform the timbre of the sound without changing
+its overall envelope and structure.</p>
+
+<p>This amounts to the following interaction on our interactive interface:</p>
+
+<video controls="" preload="auto" src="/assets/video/keep_top_resample_bottom.webm" format="video/webm">
+</video>
+
+<p>The following table contains the resulting sounds for this set of inpainting operations.</p>
+
+<div>
+
+
+<table class="tableFixFirstColumn tableFixHead full-size">
+    <colgroup>
+        <col />
+        
+        <col />
+        
+        <col />
+        
+        <col />
+        
+        <col />
+        
+        <col />
+        
+        <col />
+        
+        <col />
+        
+        <col />
+        
+    </colgroup>
+    <thead>
+        <tr class="header">
+        <th> Instrument </th>
+        
+        <th> MIDI Pitch <span>\(24\)</span> </th>
+        
+        <th> MIDI Pitch <span>\(36\)</span> </th>
+        
+        <th> MIDI Pitch <span>\(43\)</span> </th>
+        
+        <th> MIDI Pitch <span>\(48\)</span> </th>
+        
+        <th> MIDI Pitch <span>\(60\)</span> </th>
+        
+        <th> MIDI Pitch <span>\(64\)</span> </th>
+        
+        <th> MIDI Pitch <span>\(67\)</span> </th>
+        
+        <th> MIDI Pitch <span>\(72\)</span> </th>
+        
+        </tr>
+    </thead>
+    <tbody>
+    
+        <tr>
+        <th> Bass </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/bass-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/bass-36.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/bass-43.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/bass-48.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/bass-60.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/bass-64.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/bass-67.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/bass-72.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Brass </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/brass-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/brass-36.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/brass-43.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/brass-48.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/brass-60.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/brass-64.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/brass-67.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/brass-72.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Flute </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/flute-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/flute-36.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/flute-43.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/flute-48.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/flute-60.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/flute-64.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/flute-67.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/flute-72.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Guitar </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/guitar-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/guitar-36.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/guitar-43.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/guitar-48.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/guitar-60.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/guitar-64.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/guitar-67.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/guitar-72.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Keyboard </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/keyboard-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/keyboard-36.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/keyboard-43.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/keyboard-48.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/keyboard-60.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/keyboard-64.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/keyboard-67.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/keyboard-72.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Mallet </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/mallet-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/mallet-36.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/mallet-43.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/mallet-48.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/mallet-60.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/mallet-64.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/mallet-67.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/mallet-72.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Organ </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/organ-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/organ-36.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/organ-43.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/organ-48.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/organ-60.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/organ-64.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/organ-67.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/organ-72.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Reed </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/reed-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/reed-36.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/reed-43.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/reed-48.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/reed-60.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/reed-64.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/reed-67.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/reed-72.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> String </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/string-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/string-36.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/string-43.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/string-48.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/string-60.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/string-64.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/string-67.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/string-72.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Synth_lead </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/synth_lead-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/synth_lead-36.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/synth_lead-43.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/synth_lead-48.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/synth_lead-60.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/synth_lead-64.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/synth_lead-67.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/synth_lead-72.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+        <tr>
+        <th> Vocal </th>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/vocal-24.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/vocal-36.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/vocal-43.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/vocal-48.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/vocal-60.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/vocal-64.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/vocal-67.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+            <td>
+                <audio controls="" src="/assets/audio/masked_inpainting/20200309-220303-d006ab_436/keep_top_resample_full_bottom/vocal-72.wav" preload="none" format="audio/wav">
+                </audio>
+            </td>
+        
+        </tr>
+    
+    </tbody>
+</table>
+</div>
+
+
+
+        <footer class="site-footer">
+            
+            <span class="site-footer-credits">This page was generated by <a href="https://pages.github.com">GitHub Pages</a>.</span>
+        </footer>
+    </main>
+</body>
+</html>

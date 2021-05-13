@@ -1,0 +1,11 @@
+theme: jekyll-theme-cayman
+title: "CRASH: Raw Audio Score-based Generative Modeling for Controllable High-resolution Drum Sound Synthesis"
+description: "Companion website for the eponymous paper"
+github: [metadata]
+
+markdown: kramdown
+kramdown:
+    math_engine: katex
+
+plugins:
+    - jemoji
