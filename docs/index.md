@@ -3,7 +3,7 @@ title: "CRASH: Raw Audio Score-based Generative Modeling for Controllable High-r
 layout: default
 ---
 
-On this page, we present audios and plots in order to illustrate our paper. We recommand you to wear headphones in order to hear all the subtleties.
+On this page, we present audios and plots in order to illustrate our paper. We recommend you to wear headphones in order to hear all the subtleties.
 # Listening to the dataset
 Here are 200 drum sounds from the dataset (the lengths of the audio are restricted from 21000 to 12000):
 <audio controls preload="none" src="{{ site.baseurl }}/assets/audio/200_drums_train_set.wav" type="audio/wav"> </audio>
@@ -33,7 +33,7 @@ Here are 200 drum sounds generated via ODE discretization (sub-VP-1_1 schedule a
 
 <audio controls preload="none" src="{{ site.baseurl }}/assets/audio/200_generated_drums.wav" type="audio/wav"> </audio>
 
-We remark that the generated samples are less diverse than in the original dataset. This is not dramatic
+We note that the generated samples are less diverse than in the original dataset. This is not dramatic
 because the most interesting applications are in the domain of interactive sound design.
 # Interpolations in the latent space x(T) via ODE discretization
 
